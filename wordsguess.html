@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>双屏默契对弈 - 终极心跳版</title>
+    <style>
+        :root {
+            --bg: #121212; --card: #1e1e1e; --blue: #3b82f6; --red: #ef4444;
+            --text: #f3f4f6; --gold: #fbbf24; --green: #10b981; --gray: #374151;
+        }
+        body {
+            background-color: var(--bg); color: var(--text); font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        .header { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
+        .round-badge { background: #333; padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; color: var(--gold); }
+        .turn-text { font-size: 16px; font-weight: bold; }
+        
+        .timer-bar-bg { width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden; display: none; }
+        .timer-bar-fill { height: 100%; width: 100%; background: var(--gold); transition: width 0.1s linear, background-color 0.3s; }
+        .timer-bar-bg.active { display: block; }
+
+        .center-prompt { text-align: center; margin-bottom: 30px; }
+        .center-prompt .label { font-size: 14px; color: #888; margin-bottom: 10px; letter-spacing: 2px; }
+        .center-prompt .word { font-size: 42px; font-weight: 900; color: var(--gold); text-shadow: 0 0 20px rgba(251, 191, 36, 0.4); letter-spacing: 5px; }
+
+        .dual-screen { display: flex; width: 100%; max-width: 600px; gap: 15px; margin-bottom: 30px; }
+        .player-side {
+            flex: 1; background: var(--card); border-radius: 16px; padding: 15px; display: flex; flex-direction: column; align-items: center;
+            transition: all 0.3s; position: relative;
+        }
+        .player-a { border: 2px solid rgba(59, 130, 246, 0.3); }
+        .player-b { border: 2px solid rgba(239, 68, 68, 0.3); }
+        
+        .player-title { font-size: 14px; font-weight: bold; margin-bottom: 15px; padding: 5px 12px; border-radius: 20px; }
+        .player-a .player-title { background: rgba(59, 130, 246, 0.2); color: var(--blue); }
+        .player-b .player-title { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+
+        .word-slot {
+            width: 100%; height: 90px; display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: bold; border-radius: 12px; background: rgba(0,0,0,0.4);
+            color: #555; border: 1px dashed #444; text-align: center; transition: all 0.3s;
+            word-break: break-all; padding: 0 10px; box-sizing: border-box;
+        }
+        .word-slot.filled { border: 1px solid var(--gray); color: #888; font-size: 18px; } 
+        .word-slot.reveal-a { color: var(--blue); border: 1px dashed var(--blue); background: rgba(59, 130, 246, 0.1); }
+        .word-slot.reveal-b { color: var(--red); border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.1); }
+
+        .action-area { display: none; width: 100%; max-width: 500px; margin-top: 10px; }
+        .action-area.active { display: block; }
+        
+        .bubble-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 25px; }
+        .word-bubble {
+            padding: 12px 20px; border-radius: 30px; font-size: 16px; font-weight: bold; color: #333;
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            user-select: none; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .word-bubble:active { transform: scale(0.9); }
+        .word-bubble.selected {
+            transform: scale(1.1); box-shadow: 0 0 20px rgba(251, 191, 36, 0.6), inset 0 0 10px rgba(0,0,0,0.1);
+            border: 2px solid var(--gold); color: #000 !important;
+        }
+        
+        .expand-btn {
+            width: 100%; padding: 12px; background: transparent; color: #888; border: 1px dashed #555;
+            border-radius: 30px; font-size: 14px; cursor: pointer; transition: 0.2s; margin-bottom: 20px;
+        }
+
+        button.submit-btn {
+            width: 100%; padding: 15px; font-size: 18px; font-weight: bold; border-radius: 12px;
+            border: none; background: var(--gold); color: #000; cursor: pointer; transition: 0.2s;
+        }
+        button.submit-btn:disabled { background: #555; color: #888; cursor: not-allowed; transform: none; }
+        button.submit-btn:active:not(:disabled) { transform: scale(0.98); }
+
+        .history-container { width: 100%; max-width: 600px; }
+        .history-row {
+            background: var(--card); border-radius: 10px; padding: 15px; margin-bottom: 10px; display: flex;
+            align-items: center; justify-content: space-between; animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .history-num { font-size: 12px; color: #888; width: 50px; text-align: left; }
+        .history-word-a { flex: 1; text-align: right; font-size: 20px; font-weight: bold; color: var(--blue); padding-right: 15px; }
+        .history-icon { width: 40px; text-align: center; font-size: 24px; color: #444; }
+        .history-icon.hit { color: var(--green); text-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+        .history-word-b { flex: 1; text-align: left; font-size: 20px; font-weight: bold; color: var(--red); padding-left: 15px; }
+
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(18, 18, 18, 0.98);
+            z-index: 1000; display: none; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .overlay h2 { font-size: 28px; color: var(--gold); margin-bottom: 10px; }
+        .overlay p { color: #aaa; margin-bottom: 30px; text-align: center; padding: 0 20px; line-height: 1.6; }
+        .overlay button {
+            padding: 15px 40px; font-size: 20px; font-weight: bold; border-radius: 30px;
+            border: 2px solid var(--gold); background: transparent; color: var(--gold); cursor: pointer;
+        }
+
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9);
+            z-index: 2000; display: none; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: var(--card); padding: 40px; border-radius: 20px; text-align: center;
+            border: 2px solid var(--green); box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-content h2 { color: var(--green); font-size: 36px; margin: 0 0 10px 0; }
+        .modal-content p { font-size: 18px; color: #ccc; margin-bottom: 25px; }
+        .modal-content strong { color: var(--gold); font-size: 28px; }
+        .modal-content button {
+            background: var(--green); color: #fff; border: none; padding: 15px 30px; font-size: 18px; border-radius: 10px; cursor: pointer;
+        }
+
+        #fxCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3000; }
+
+        /* 新增：居中倒计时动画核心 */
+        #countdown-big-number {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 200px; /* 巨大字体 */
+            font-weight: 900;
+            color: var(--red);
+            text-shadow: 0 0 50px rgba(239, 68, 68, 0.8), 0 0 20px rgba(255, 255, 255, 0.8);
+            z-index: 5000;
+            pointer-events: none;
+            opacity: 0;
+            font-family: 'Arial Black', Impact, sans-serif;
+        }
+        
+        /* 心跳弹出动画：放大 -> 缩小消失 */
+        .pulse-anim {
+            animation: heartBeatPop 1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+        @keyframes heartBeatPop {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            20% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
+            60% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+        }
+
+        /* 超时红屏闪烁 */
+        .timeout-flash { animation: flashRed 0.5s ease-in-out 3; }
+        @keyframes flashRed { 0%, 100% { background-color: var(--bg); } 50% { background-color: #7f1d1d; } }
+    </style>
+</head>
+<body>
+
+    <canvas id="fxCanvas"></canvas>
+
+    <!-- 新增：屏幕中间的倒计时大字 -->
+    <div id="countdown-big-number">5</div>
+
+    <div class="header">
+        <div class="header-top">
+            <div class="round-badge" id="roundText">第 1 回合</div>
+            <div class="turn-text" id="turnText">轮到 玩家A 输入</div>
+        </div>
+        <div class="timer-bar-bg" id="timerBarBg">
+            <div class="timer-bar-fill" id="timerBarFill"></div>
+        </div>
+    </div>
+
+    <div class="center-prompt">
+        <div class="label">本轮联想类别</div>
+        <div class="word" id="promptWord">--</div>
+    </div>
+
+    <div class="dual-screen">
+        <div class="player-side player-a">
+            <div class="player-title">玩家 A</div>
+            <div class="word-slot" id="slotA">??</div>
+        </div>
+        <div class="player-side player-b">
+            <div class="player-title">玩家 B</div>
+            <div class="word-slot" id="slotB">??</div>
+        </div>
+    </div>
+
+    <div class="action-area" id="actionArea">
+        <div class="bubble-grid" id="bubbleGrid"></div>
+        <button class="expand-btn" id="expandBtn">没有合适的？点击查看全部选项 👇</button>
+        <button class="submit-btn" id="submitBtn" disabled>确认提交</button>
+    </div>
+
+    <div class="history-container" id="historyList"></div>
+
+    <div class="overlay" id="passOverlay">
+        <h2 id="passTitle">请将设备交给 玩家B</h2>
+        <p>上一回合未结束，请勿偷看！<br>确认拿稳设备后再点击下方按钮。</p>
+        <button onclick="startTurn()">我准备好了</button>
+    </div>
+
+    <div class="modal" id="resultModal">
+        <div class="modal-content">
+            <h2>🎉 默契达成！</h2>
+            <p>你们在第 <span id="finalRound">1</span> 回合，同时想到了：</p>
+            <p><strong id="finalWord">--</strong></p>
+            <button onclick="location.reload()">再来一局</button>
+        </div>
+    </div>
+
+<script>
+    // ================= 1. 词库数据 =================
+    const gameData = {
+      "categories": [
+        { "category": "水果", "words": ["苹果", "香蕉", "橘子", "西瓜", "葡萄", "草莓", "芒果", "菠萝", "樱桃", "桃子", "梨", "柠檬", "哈密瓜", "柚子", "火龙果", "猕猴桃", "蓝莓", "榴莲", "木瓜", "石榴"] },
+        { "category": "动物", "words": ["狗", "猫", "大象", "老虎", "狮子", "猴子", "熊猫", "长颈鹿", "兔子", "老鼠", "企鹅", "鸟", "猪", "牛", "马", "羊", "鸡", "鸭", "蛇", "青蛙", "鲨鱼", "鲸鱼", "海豚", "乌龟"] },
+        { "category": "颜色", "words": ["红色", "蓝色", "绿色", "黄色", "紫色", "黑色", "白色", "粉色", "橙色", "青色", "灰色", "金色", "银色", "棕色"] },
+        { "category": "游戏", "words": ["王者荣耀", "和平精英", "原神", "英雄联盟", "吃鸡", "我的世界", "五子棋", "俄罗斯方块", "斗地主", "麻将", "象棋", "围棋", "跳一跳", "消消乐", "贪吃蛇"] },
+        { "category": "饮料", "words": ["可乐", "雪碧", "奶茶", "咖啡", "啤酒", "果汁", "白开水", "矿泉水", "牛奶", "茶", "芬达", "王老吉", "红牛", "脉动"] }
+      ]
+    };
+    const candyColors = ["#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#E0BBE4", "#FEC8D8", "#D4F0F0", "#FFD3B6", "#A0E7E5"];
+
+    // ================= 2. 音乐音效引擎 =================
+    let audioCtx = null;
+    let bgmTimer = null;
+    let bgmStep = 0;
+    const melody = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 329.63, 349.23, 440.00, 523.25, 698.46, 523.25, 440.00, 349.23, 293.66];
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playTone(freq, type, duration, vol=0.1) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function startBGM() {
+        if (bgmTimer) return;
+        bgmStep = 0;
+        bgmTimer = setInterval(() => {
+            const note = melody[bgmStep % melody.length];
+            playTone(note, 'triangle', 0.2, 0.04); 
+            if (bgmStep % 2 === 0) playTone(note / 2, 'square', 0.4, 0.02);
+            bgmStep++;
+        }, 250); 
+    }
+    function stopBGM() { if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; } }
+
+    function playPop() { playTone(800, 'sine', 0.1, 0.1); setTimeout(() => playTone(1200, 'sine', 0.1, 0.1), 50); }
+    function playFail() { playTone(300, 'sawtooth', 0.3, 0.1); setTimeout(() => playTone(200, 'sawtooth', 0.4, 0.1), 150); }
+    function playSuccess() { 
+        playTone(523.25, 'sine', 0.15, 0.1); 
+        setTimeout(() => playTone(659.25, 'sine', 0.15, 0.1), 150); 
+        setTimeout(() => playTone(783.99, 'sine', 0.15, 0.1), 300); 
+        setTimeout(() => playTone(1046.50, 'sine', 0.4, 0.1), 450); 
+    }
+    function playAlarm() {
+        playTone(880, 'square', 0.1, 0.1);
+        setTimeout(() => playTone(880, 'square', 0.1, 0.1), 150);
+        setTimeout(() => playTone(880, 'square', 0.1, 0.1), 300);
+    }
+    // 心跳重击音效
+    function playHeartbeat() {
+        playTone(150, 'sine', 0.2, 0.2); // 低频重击
+        setTimeout(() => playTone(120, 'sine', 0.2, 0.15), 200);
+    }
+
+    // ================= 3. 游戏逻辑 =================
+    let round = 1;
+    let currentCategory = "";
+    let currentWordPool = []; 
+    let currentDisplayWords = []; 
+    let selectedWord = ""; 
+    let wordA = "";
+    let wordB = "";
+    let currentTurn = "A"; 
+    let timerInterval = null;
+    let timeLeft = 15; 
+    const MAX_TIME = 15;
+    let lastTriggeredSecond = -1; // 用于控制每秒只触发一次
+
+    const roundText = document.getElementById('roundText');
+    const turnText = document.getElementById('turnText');
+    const promptWord = document.getElementById('promptWord');
+    const slotA = document.getElementById('slotA');
+    const slotB = document.getElementById('slotB');
+    const actionArea = document.getElementById('actionArea');
+    const bubbleGrid = document.getElementById('bubbleGrid');
+    const expandBtn = document.getElementById('expandBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const historyList = document.getElementById('historyList');
+    const passOverlay = document.getElementById('passOverlay');
+    const passTitle = document.getElementById('passTitle');
+    const resultModal = document.getElementById('resultModal');
+    const timerBarBg = document.getElementById('timerBarBg');
+    const timerBarFill = document.getElementById('timerBarFill');
+    const bigNumberEl = document.getElementById('countdown-big-number');
+
+    function initGame() {
+        const randomCatObj = gameData.categories[Math.floor(Math.random() * gameData.categories.length)];
+        currentCategory = randomCatObj.category;
+        currentWordPool = randomCatObj.words; 
+        promptWord.innerText = currentCategory;
+        startRound();
+    }
+
+    function startRound() {
+        stopBGM();
+        wordA = "";
+        wordB = "";
+        slotA.innerText = "??";
+        slotA.className = "word-slot"; 
+        slotB.innerText = "??";
+        slotB.className = "word-slot"; 
+        currentTurn = "A";
+        turnText.innerText = "轮到 玩家A 输入";
+        turnText.style.color = "var(--blue)";
+        passTitle.innerText = "请将设备交给 玩家 A";
+        passOverlay.style.display = "flex";
+    }
+
+    function startTurn() {
+        initAudio(); 
+        startBGM(); 
+        passOverlay.style.display = "none";
+        actionArea.classList.add('active');
+        selectedWord = "";
+        submitBtn.disabled = true;
+        generateRandomBubbles();
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = MAX_TIME;
+        lastTriggeredSecond = Math.ceil(MAX_TIME); // 重置
+        timerBarBg.classList.add('active');
+        timerBarFill.style.width = '100%';
+        timerBarFill.style.backgroundColor = 'var(--gold)';
+        
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1;
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                clearInterval(timerInterval);
+                triggerRandomSelect(); 
+            }
+            const percent = (timeLeft / MAX_TIME) * 100;
+            timerBarFill.style.width = percent + '%';
+            
+            // 核心新增：最后5秒的动态大数字
+            if (timeLeft <= 5 && timeLeft > 0) {
+                timerBarFill.style.backgroundColor = 'var(--red)';
+                
+                // 获取当前整数秒 (5, 4, 3, 2, 1)
+                const currentSecond = Math.ceil(timeLeft);
+                
+                // 如果进入了新的一秒，触发大数字动画
+                if (currentSecond !== lastTriggeredSecond) {
+                    lastTriggeredSecond = currentSecond;
+                    showBigNumber(currentSecond);
+                }
+            }
+        }, 100);
+    }
+
+    // 显示居中放大缩小的倒计时数字
+    function showBigNumber(num) {
+        bigNumberEl.innerText = num;
+        
+        // 移除动画类，强制重绘，再重新加上动画类
+        bigNumberEl.classList.remove('pulse-anim');
+        void bigNumberEl.offsetWidth; // 触发重绘
+        bigNumberEl.classList.add('pulse-anim');
+        
+        // 播放心跳音
+        playHeartbeat();
+    }
+
+    function triggerRandomSelect() {
+        stopBGM();
+        playAlarm(); 
+        
+        document.body.classList.add('timeout-flash');
+        turnText.innerText = "⚠️ 时间到！随机盲选中...";
+        turnText.style.color = "var(--red)";
+        
+        const bubbles = document.querySelectorAll('.word-bubble');
+        let rollCount = 0;
+        
+        const rollInterval = setInterval(() => {
+            bubbles.forEach(b => b.classList.remove('selected'));
+            const randomBubble = bubbles[Math.floor(Math.random() * bubbles.length)];
+            if (randomBubble) randomBubble.classList.add('selected');
+            playPop();
+            
+            rollCount++;
+            if (rollCount > 10) { 
+                clearInterval(rollInterval);
+                const finalBubble = document.querySelector('.word-bubble.selected');
+                if (finalBubble) {
+                    selectedWord = finalBubble.innerText;
+                    playTone(400, 'square', 0.2, 0.1); 
+                    
+                    setTimeout(() => {
+                        document.body.classList.remove('timeout-flash');
+                        handleSubmit(selectedWord);
+                    }, 800);
+                }
+            }
+        }, 100);
+    }
+
+    function generateRandomBubbles() {
+        const shuffled = [...currentWordPool].sort(() => 0.5 - Math.random());
+        currentDisplayWords = shuffled.slice(0, 10);
+        renderBubbles(currentDisplayWords);
+        expandBtn.style.display = "block"; 
+    }
+
+    function renderBubbles(words) {
+        bubbleGrid.innerHTML = '';
+        words.forEach(word => {
+            const div = document.createElement('div');
+            div.className = 'word-bubble';
+            div.innerText = word;
+            div.style.backgroundColor = candyColors[Math.floor(Math.random() * candyColors.length)];
+            if (word === selectedWord) div.classList.add('selected');
+            
+            div.onclick = () => {
+                if (timeLeft <= 0) return; 
+                playPop(); 
+                document.querySelectorAll('.word-bubble').forEach(el => el.classList.remove('selected'));
+                div.classList.add('selected');
+                selectedWord = word;
+                submitBtn.disabled = false;
+            };
+            bubbleGrid.appendChild(div);
+        });
+    }
+
+    expandBtn.addEventListener('click', () => {
+        if (timeLeft <= 0) return;
+        playPop();
+        currentDisplayWords = [...currentWordPool]; 
+        renderBubbles(currentDisplayWords);
+        expandBtn.style.display = "none"; 
+    });
+
+    submitBtn.addEventListener('click', () => {
+        if (!selectedWord || timeLeft <= 0) return;
+        clearInterval(timerInterval);
+        stopBGM();
+        handleSubmit(selectedWord);
+    });
+
+    function handleSubmit(val) {
+        actionArea.classList.remove('active');
+        timerBarBg.classList.remove('active');
+
+        if (currentTurn === "A") {
+            wordA = val;
+            slotA.innerText = "已锁定";
+            slotA.classList.add('filled');
+            currentTurn = "B";
+            turnText.innerText = "轮到 玩家B 输入";
+            turnText.style.color = "var(--red)";
+            passTitle.innerText = "请将设备交给 玩家 B";
+            passOverlay.style.display = "flex";
+        } 
+        else if (currentTurn === "B") {
+            wordB = val;
+            slotB.innerText = "已锁定";
+            slotB.classList.add('filled');
+            turnText.innerText = "正在判定...";
+            setTimeout(() => { checkResult(); }, 600);
+        }
+    }
+
+    function checkResult() {
+        const isMatch = (wordA === wordB);
+        
+        slotA.innerText = wordA;
+        slotB.innerText = wordB;
+        slotA.classList.add('reveal-a');
+        slotB.classList.add('reveal-b');
+
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        row.innerHTML = `
+            <div class="history-num">第 ${round} 轮</div>
+            <div class="history-word-a">${wordA}</div>
+            <div class="history-icon ${isMatch ? 'hit' : ''}">${isMatch ? '⚡' : '≠'}</div>
+            <div class="history-word-b">${wordB}</div>
+        `;
+        historyList.prepend(row);
+
+        if (isMatch) {
+            playSuccess(); 
+            startConfetti(); 
+            document.getElementById('finalRound').innerText = round;
+            document.getElementById('finalWord').innerText = wordA;
+            resultModal.style.display = 'flex';
+        } else {
+            playFail(); 
+            startShake(); 
+            setTimeout(() => {
+                round++;
+                roundText.innerText = `第 ${round} 回合`;
+                startRound();
+            }, 3000);
+        }
+    }
+
+    // ================= 4. 视觉特效引擎 =================
+    const canvas = document.getElementById('fxCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let animationId = null;
+
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function createParticles(x, y, count, colors, speed, isConfetti) {
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x, y, vx: (Math.random() - 0.5) * speed, vy: (Math.random() - 0.5) * speed - (isConfetti ? 5 : 0),
+                size: Math.random() * (isConfetti ? 10 : 6) + 3, color: colors[Math.floor(Math.random() * colors.length)],
+                life: 1, decay: Math.random() * 0.02 + 0.015, gravity: isConfetti ? 0.15 : 0.05,
+                rotation: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 0.2, isConfetti
+            });
+        }
+        if (!animationId) updateParticles();
+    }
+
+    function updateParticles() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx; p.y += p.vy; p.vy += p.gravity; p.vx *= 0.98; p.life -= p.decay; p.rotation += p.rotSpeed;
+            if (p.life <= 0 || p.y > canvas.height) { particles.splice(i, 1); continue; }
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+            if (p.isConfetti) ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size/2);
+            else { ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI * 2); ctx.fill(); }
+            ctx.restore();
+        }
+        if (particles.length > 0) animationId = requestAnimationFrame(updateParticles);
+        else { cancelAnimationFrame(animationId); animationId = null; ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    }
+
+    function startConfetti() {
+        const colors = ["#fbbf24", "#3b82f6", "#ef4444", "#10b981", "#ffb3ba", "#e0bbe4"];
+        createParticles(canvas.width / 2, canvas.height * 0.4, 80, colors, 15, true);
+        setTimeout(() => createParticles(0, canvas.height, 40, colors, 20, true), 200);
+        setTimeout(() => createParticles(canvas.width, canvas.height, 40, colors, 20, true), 400);
+    }
+
+    function startShake() {
+        createParticles(canvas.width / 2, canvas.height / 2, 50, ["#555", "#777", "#999"], 10, false);
+        const container = document.querySelector('.dual-screen');
+        container.style.animation = 'none'; container.offsetHeight; 
+        container.style.animation = 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both';
+    }
+
+    const style = document.createElement('style');
+    style.innerHTML = `@keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-8px, 0, 0); } 40%, 60% { transform: translate3d(8px, 0, 0); } }`;
+    document.head.appendChild(style);
+
+    initGame();
+
+</script>
+</body>
+</html>
